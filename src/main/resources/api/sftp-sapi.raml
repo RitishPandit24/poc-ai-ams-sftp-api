@@ -1,0 +1,208 @@
+#%RAML 1.0
+
+title: SFTP System API
+version: v1
+baseUri: /api/v1
+mediaType: application/json
+
+documentation:
+  - title: SFTP System API
+    content: |
+      System API for performing common SFTP operations including
+      read, write, copy, move and list.
+
+types:
+
+  FileOperationRequest:
+    type: object
+    properties:
+      sourcePath:
+        type: string
+        required: true
+      targetPath:
+        type: string
+        required: true
+      overwrite:
+        type: boolean
+        required: false
+        default: false
+
+  WriteResponse:
+    type: object
+    properties:
+      status:
+        type: string
+      message:
+        type: string
+      path:
+        type: string
+
+  OperationResponse:
+    type: object
+    properties:
+      status:
+        type: string
+      message:
+        type: string
+
+  FileInfo:
+    type: object
+    properties:
+      fileName:
+        type: string
+      path:
+        type: string
+      size:
+        type: number
+      timestamp:
+        type: datetime
+      regularFile:
+        type: boolean
+      directory:
+        type: boolean
+
+  ErrorResponse:
+    type: object
+    properties:
+      status:
+        type: string
+      errorCode:
+        type: string
+      message:
+        type: string
+
+/sftp:
+
+  /read:
+    get:
+      description: Read a file from the SFTP server.
+      queryParameters:
+        path:
+          type: string
+          required: true
+          description: Relative path of the file.
+      responses:
+        200:
+          body:
+            application/octet-stream:
+        400:
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          body:
+            application/json:
+              type: ErrorResponse
+
+  /write:
+    post:
+      description: Write the request payload to an SFTP file.
+      queryParameters:
+        path:
+          type: string
+          required: true
+          description: Relative target path.
+        writeMode:
+          type: string
+          required: false
+          default: OVERWRITE
+          enum:
+            - OVERWRITE
+            - APPEND
+            - CREATE_NEW
+      responses:
+        201:
+          body:
+            application/json:
+              type: WriteResponse
+        400:
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          body:
+            application/json:
+              type: ErrorResponse
+
+  /copy:
+    post:
+      description: Copy a file or directory on the SFTP server.
+      body:
+        application/json:
+          type: FileOperationRequest
+          example:
+            {
+              "sourcePath": "inbound/test.txt",
+              "targetPath": "archive/test.txt",
+              "overwrite": true
+            }
+      responses:
+        200:
+          body:
+            application/json:
+              type: OperationResponse
+        400:
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          body:
+            application/json:
+              type: ErrorResponse
+
+  /move:
+    post:
+      description: Move a file or directory on the SFTP server.
+      body:
+        application/json:
+          type: FileOperationRequest
+          example:
+            {
+              "sourcePath": "inbound/test.txt",
+              "targetPath": "processed/test.txt",
+              "overwrite": true
+            }
+      responses:
+        200:
+          body:
+            application/json:
+              type: OperationResponse
+        400:
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          body:
+            application/json:
+              type: ErrorResponse
+
+  /list:
+    get:
+      description: List files and directories from an SFTP directory.
+      queryParameters:
+        path:
+          type: string
+          required: false
+          default: ""
+          description: Relative directory path.
+        recursive:
+          type: boolean
+          required: false
+          default: false
+      responses:
+        200:
+          body:
+            application/json:
+              type: FileInfo[]
+        400:
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          body:
+            application/json:
+              type: ErrorResponse

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:tracing="http://www.mulesoft.org/schema/mule/tracing" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/tracing http://www.mulesoft.org/schema/mule/tracing/current/mule-tracing.xsd">
+	<flow name="poc-ai-ams-sftp-api-main">
+        <http:listener config-ref="sftp-sapi-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+		<ee:transform doc:name="Transform Message" doc:id="b0b86423-24e8-4ae0-8b48-3a07365825c3" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="correlationID" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.headers.correlationID default uuid()]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<tracing:with-correlation-id doc:name="With CorrelationID" doc:id="4036ac02-a6a4-495f-8a10-97f8ead59cac" correlationId="#[vars.correlationID]">
+			<logger level="INFO" doc:name="Logger" doc:id="4f277681-2c5f-444f-b0ee-346dc743f48d" message="sftp-sapi-main-flow-start"/>
+			<try doc:name="Try" doc:id="2e72e244-a8f1-454f-b955-da74441be523" >
+				<apikit:router config-ref="sftp-sapi-config" />
+				<error-handler >
+					<on-error-propagate type="ANY" enableNotifications="true" logException="true">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    event: "event: " ++ vars.correlationID,
+    message: error.description default error.detailedDescription,
+    orgId: p("anypoint.orgId") default "",
+    envId: p("anypoint.envId") default "",
+    timestamp: now(),
+    appId: app.name default ""
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+						<logger level="INFO" doc:name="Logger" doc:id="bec180ba-0eac-4b43-892f-7bd242cdd208" message="#[payload]"/>
+            </on-error-propagate>
+				</error-handler>
+			</try>
+			<logger level="INFO" doc:name="Logger" doc:id="f47f91d0-32fa-47ad-9cfb-6b6fc442a429" message="sftp-sapi-main-flow-end" />
+		</tracing:with-correlation-id>
+    </flow>
+    <flow name="get:\sftp\list:sftp-sapi-config">
+        <logger level="INFO" message="get:\sftp\list:sftp-sapi-config" />
+		<ee:transform doc:name="Transform Message" doc:id="d65eb8ee-3afe-4d30-b7cc-ff219302f95f" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="params" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	path : attributes.queryParams.path,
+	recursive : attributes.queryParams.recursive default "False"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<sftp:list doc:name="List" doc:id="4c954d2e-93f5-45d2-acf9-f5d44592fbe5" config-ref="SFTP_Config" directoryPath="#[vars.params.path]" recursive="#[vars.params.recursive]"/>
+		<ee:transform doc:name="Transform Message" doc:id="6cc7525d-f9ff-46f0-a149-c54d33715265" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+    <flow name="get:\sftp\read:sftp-sapi-config">
+        <logger level="INFO" message="get:\sftp\read:sftp-sapi-config" />
+		<ee:transform doc:name="Transform Message" doc:id="73863285-ab68-43cc-b810-6eff4c9e7d75" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="params" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	path : attributes.queryParams.path
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<sftp:read doc:name="Read" doc:id="6df4b331-e2aa-49e4-a470-4eda6e3902fb" config-ref="SFTP_Config" path="#[vars.params.path]"/>
+    </flow>
+    <flow name="post:\sftp\copy:application\json:sftp-sapi-config">
+        <logger level="INFO" message="post:\sftp\copy:application\json:sftp-sapi-config" />
+		<sftp:copy doc:name="Copy" doc:id="21f6f748-9948-4c92-91b3-053f56506b8f" config-ref="SFTP_Config" sourcePath="#[payload.sourcePath]" targetPath="#[payload.targetPath]" overwrite='#[payload.overwrite  default "False"]'/>
+    </flow>
+    <flow name="post:\sftp\move:application\json:sftp-sapi-config">
+        <logger level="INFO" message="post:\sftp\move:application\json:sftp-sapi-config" />
+		<sftp:move doc:name="Move" doc:id="174a5ab4-de2c-4504-a54a-fc697a46a3d8" config-ref="SFTP_Config" sourcePath="#[payload.sourcePath]" targetPath="#[payload.targetPath]" overwrite='#[payload.overwrite default "False"]'/>
+    </flow>
+    <flow name="post:\sftp\write:sftp-sapi-config">
+        <logger level="INFO" message="post:\sftp\write:sftp-sapi-config" />
+		<ee:transform doc:name="Transform Message" doc:id="705906a8-7a8d-4d59-8b1c-3a609555bc6b" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="params" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	path : attributes.queryParams.path,
+	writeMode : attributes.queryParams.writeMode default "OVERWRITE"
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<sftp:write doc:name="Write" doc:id="ba9323be-9aaa-4e76-823e-a444bb3ce5a3" config-ref="SFTP_Config" path="#[vars.params.path]" mode="#[vars.params.writeMode]"/>
+    </flow>
+</mule>
